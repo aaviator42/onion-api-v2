@@ -1,20 +1,18 @@
 <?php
 
 /*
-	Satire-vs-Reality API v2
+	Satire-vs-Reality API
 	by @aaviator42
-	2022-10-09
+	2022-09-29
 	
 	Spits out a JSON array that contains:
 	 - Satire The Onion headlines
 	 - Real 'Not The Onion' headlines
 	
-	Satire articles are sourced from The Onion's website
+	Satire articles are sourced from The Onion's RSS feed
 	Real articles are sourced from Reddit: r/nottheonion/
 */
 
-//Include parser for The Onion's HTML
-require 'simple_html_dom.php';
 
 header('Content-Type: application/json');
 
@@ -29,7 +27,7 @@ if(file_exists('data_cache.json')){
 }
 
 //RSS feed of satire articles from The Onion
-$satireSource = "https://www.theonion.com/politics/news-in-brief";
+$satireSource = "https://www.theonion.com/rss";
 
 //JSON of NOT satire articles from Reddit: r/nottheonion/
 //we use /top/?t=day to get top posts from the past 24 hours
@@ -37,9 +35,9 @@ $satireSource = "https://www.theonion.com/politics/news-in-brief";
 $realitySource = "https://www.reddit.com/r/nottheonion/top/.json?sort=top&t=week";
 
 
-//load satire site into array
-//function from simple_html_dom.php
-$satireRaw = file_get_html($satireSource);
+//parse satire feed into array
+$parsedSatire = xml2array($satireSource);
+$parsedSatire = $parsedSatire['rss']['channel']['item']; //articles
 
 //final list of satire articles
 $satireArticles = array();
@@ -48,10 +46,18 @@ $satireArticles = array();
 //we only want articles that belong to the political categories,
 //because that's the kind of content that tends to be posted on r/nottheonion/
 //and we want it to be hard to distinguish between reality and satire articles
-foreach($satireRaw->find('H2') as $element){
-	$itemFinal['title'] = $element->innertext;
-	$itemFinal['link'] = $element->parent->href;
-	array_push($satireArticles, $itemFinal);
+$acceptedCategories = ['politicians', 'politics', 'politicalphilosophy', 'politicalideologies'];
+foreach($parsedSatire as $item){
+	if(isset($item['category'][0]) && is_array($item['category'])){
+		if(count(array_intersect($acceptedCategories, $item['category'])) > 0){
+			//item is political!
+			//extract title and link, and push to list
+			$itemFinal['title'] = $item['title'];
+			$itemFinal['link'] = $item['link'];
+			
+			array_push($satireArticles, $itemFinal);
+		}
+	}
 }
 
 //satire list size
